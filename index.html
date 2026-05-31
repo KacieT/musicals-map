@@ -536,13 +536,18 @@
       font-size: 2rem !important;
     }
 
-    /* 🔥 關鍵：限制圖片大小 */
-    .glightbox-container .gslide-image {
-      display: flex !important;
-      justify-content: center !important;
-      align-items: center !important;
+    /* ========== GLightbox 強制樣式 ========== */
+    /* 基礎容器樣式 */
+    .glightbox-container,
+    .glightbox-container *,
+    .glightbox-container *::before,
+    .glightbox-container *::after {
+      box-sizing: border-box;
     }
 
+    /* 強制限制圖片容器大小 */
+    .glightbox-container .gslide-media,
+    .glightbox-container .gslide-image,
     .glightbox-container .gslide-image img {
       max-width: 70vw !important;
       max-height: 70vh !important;
@@ -551,12 +556,43 @@
       object-fit: contain !important;
     }
 
+    /* 確保媒體容器居中 */
+    .glightbox-container .gslide-media {
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
+      margin: 0 auto !important;
+    }
+
     /* 手機版調整 */
     @media (max-width: 768px) {
+      .glightbox-container .gslide-media,
+      .glightbox-container .gslide-image,
       .glightbox-container .gslide-image img {
         max-width: 85vw !important;
         max-height: 60vh !important;
       }
+    }
+
+    /* 其他 GLightbox 樣式 */
+    .glightbox-container {
+      background: rgba(13, 13, 15, 0.95) !important;
+    }
+
+    .glightbox-description {
+      color: var(--muted) !important;
+      background: rgba(13, 13, 15, 0.9) !important;
+    }
+
+    .gslide-title {
+      color: var(--text) !important;
+      font-family: 'Playfair Display', Georgia, serif !important;
+    }
+
+    .gclose {
+      color: var(--gold) !important;
+      font-size: 2rem !important;
+      z-index: 9999 !important;
     }
 
     /* 確保描述文字不遮擋圖片 */
