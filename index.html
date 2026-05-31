@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>紐約音樂劇地圖 · NYC Musical Map</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- GLightbox CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
+  <!-- GLightbox JS - 移到此處確保先加載 -->
+  <script src="https://cdn.jsdelivr.net/npm/glightbox/dist/js/glightbox.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+    :root {
+      --bg:       #0d0d0f;
+      --surface:  #16161a;
+      --border:   #2a2a32;
+      --gold:     #c9a84c;
+      --gold-dim: #d4b978;
+      --text:     #f0ece0;
+      --muted:    #b8b4a8;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', 'PingFang TC', sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.2rem;
+      color: var(--gold);
+    }
+    header span {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* 地圖區 */
+    #map-area {
+      flex: 1;
+      background: #0f0f18;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #map-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .marker-group { cursor: pointer; }
+
+    .marker-circle {
+      fill: var(--gold);
+      stroke: #0d0d0f;
+      stroke-width: 2;
+    }
+    .marker-group:hover .marker-circle {
+      fill: #f0c060;
+      filter: drop-shadow(0 0 8px rgba(201,168,76,0.8));
+    }
+    .marker-group.active .marker-circle {
+      fill: #f0c060;
+      filter: drop-shadow(0 0 10px rgba(201,168,76,0.9));
+      stroke: #f0c060;
+      stroke-width: 3;
+    }
+    .marker-count {
+      fill: #0d0d0f;
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .marker-label {
+      fill: #c8c4bc;
+      font-size: 9px;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    #map-hint {
+      position: absolute;
+      bottom: 14px;
+      left: 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--muted);
+      line-height: 1.9;
+      pointer-events: none;
+    }
+
+    /* 右側面板 */
+    #panel {
+      width: 350px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #panel-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      color: var(--muted);
+      text-align: center;
+      padding: 40px 30px;
+    }
+    #panel-empty .icon { font-size: 2rem; opacity: 0.35; }
+    #panel-empty p { font-size: 0.77rem; line-height: 1.75; }
+
+    #panel-content {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #panel-header {
+      padding: 20px 22px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #panel-era {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.64rem;
+      color: var(--gold);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    #panel-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.3rem;
+      line-height: 1.2;
+    }
+    #panel-sub {
+      font-size: 0.74rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    #panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+    #panel-body::-webkit-scrollbar { width: 3px; }
+    #panel-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .mcard {
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .mcard:hover { border-color: var(--gold-dim); }
+    .mcard.active { border-color: var(--gold); }
+
+    .mcard-top { padding: 13px 15px 11px; }
+
+    .mcard-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 5px;
+    }
+    .mcard-name {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-style: italic;
+      font-size: 0.95rem;
+    }
+    .mcard-year {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.66rem;
+      color: var(--gold);
+      margin-left: 8px;
+      white-space: nowrap;
+    }
+    .mcard-setting {
+      font-size: 0.68rem;
+      color: var(--gold-dim);
+      margin-bottom: 6px;
+      font-family: 'DM Mono', monospace;
+    }
+    .mcard-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .expand-btn {
+      display: block;
+      width: 100%;
+      padding: 8px 15px;
+      background: transparent;
+      border: none;
+      border-top: 1px solid var(--border);
+      color: var(--gold-dim);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.64rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, color 0.15s;
+    }
+    .expand-btn:hover { background: rgba(201,168,76,0.07); color: var(--gold); }
+
+    .mcard-detail {
+      display: none;
+      padding: 13px 15px;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+    }
+    .mcard-detail.open { display: block; }
+
+    .photo-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      margin-bottom: 11px;
+    }
+    .photo-box {
+      aspect-ratio: 4/3;
+      background: #1a1a24;
+      border: 1px dashed #2a2a3a;
+      border-radius: 2px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 8px;
+      text-align: center;
+    }
+    .photo-box .picon { font-size: 1.2rem; opacity: 0.45; }
+    .photo-box .plabel {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.58rem;
+      color: var(--muted);
+    }
+    .photo-box .psource {
+      font-size: 0.55rem;
+      color: var(--gold-dim);
+      line-height: 1.3;
+    }
+
+    .detail-text {
+      font-size: 0.74rem;
+      line-height: 1.78;
+      color: var(--text);
+      opacity: 0.82;
+    }
+
+    footer {
+      padding: 7px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    /* --- Leaflet 地圖樣式 --- */
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #0a0a14; /* 地圖背景色 */
+      z-index: 1;
+    }
+
+    /* 自定義金色標記 */
+    .custom-marker {
+      background: transparent;
+      border: none;
+    }
+    .marker-circle {
+      width: 30px;
+      height: 30px;
+      background: var(--gold);
+      border: 2px solid #0d0d0f;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0d0d0f;
+      font-weight: bold;
+      font-size: 12px;
+      box-shadow: 0 0 10px rgba(201, 168, 76, 0.4);
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .marker-circle:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 15px rgba(201, 168, 76, 0.8);
+    }
+
+    .marker-circle.active {
+      background: #f0c060;
+      transform: scale(1.2);
+    }
+
+    /* ========== 地圖標記標籤樣式 ========== */
+    .marker-label {
+      /* 位置設定 */
+      position: absolute;
+      top: 40px;                    /* 圓圈下方 40px，增加間距 */
+      left: 50%;
+      transform: translateX(-50%);  /* 水平居中 */
+        
+      /* 文字樣式 */
+      color: #f0ece0;               /* 淺米白色，提高對比 */
+      font-size: 11px;              /* 稍微放大 */
+      font-weight: 500;             /* 中等粗細 */
+      letter-spacing: 0.02em;       /* 增加字距，提升可讀性 */
+      white-space: nowrap;          /* 不換行 */
+        
+      /* 背景與邊框 */
+      background: rgba(13, 13, 15, 0.6);  /* 半透明深色背景 */
+      padding: 3px 8px;             /* 內距，讓文字不貼邊 */
+      border-radius: 4px;           /* 圓角 */
+        
+      /* 陰影效果 */
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);  /* 文字陰影 */
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);   /* 整體陰影 */
+        
+      /* 其他 */
+      pointer-events: none;         /* 不阻擋滑鼠事件 */
+      z-index: 1000;                /* 確保在最上層 */
+        
+      /* 平滑過渡 */
+      transition: all 0.2s ease;
+    }
+
+    /* 滑鼠懸停時，標籤稍微上移並變亮 */
+    .marker-group:hover .marker-label {
+      top: 42px;                    /* 微幅下移 */
+      background: rgba(13, 13, 15, 0.8);   /* 背景稍深 */
+      color: #ffffff;               /* 文字變純白 */
+    }
+
+    /* ========== Leaflet 地圖圖層優化 ========== */
+
+    /* 提升地圖瓦片的亮度和對比度 */
+    .leaflet-layer {
+      filter: brightness(1.2) contrast(1.1);  /* 亮度 +20%，對比 +10% */
+    }
+
+    /* 地圖載入時的過渡效果 */
+    .leaflet-tile {
+      transition: filter 0.3s ease;
+    }
+
+    /* 地圖容器背景（稍微亮一點）*/
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #12121a;          /* 比原來亮一點 */
+      z-index: 1;
+    }
+
+    /* ========== 桌面版預設（放在所有 @media 外面）========== */
+    #panel-toggle {
+      display: none;  /* 桌面版隱藏 */
+    }
+
+    /* ========== 手機版響應式設計 ========== */
+    /* ========== 手機版底部抽屜設計 ========== */
+    @media (max-width: 768px) {
+      main {
+        flex-direction: column;
+      }
+      
+      #map-area {
+        height: 60vh;  /* 地圖佔 60% */
+        flex: none;
+      }
+      
+      /* 底部抽屜面板 */
+      #panel {
+        width: 100%;
+        height: 40vh;  /* 預設高度 */
+        max-height: 85vh;  /* 最大高度（留一點給瀏覽器UI）*/
+        min-height: 150px;  /* 最小高度 */
+        border-left: none;
+        border-top: 1px solid var(--border);
+        
+        /* 抽屜效果 */
+        overflow-y: auto;
+        position: relative;
+        transition: height 0.3s ease;
+        
+        /* 未來可擴展：拖曳手柄（目前僅視覺效果）*/
+        #panel::before {
+          content: '';
+          position: absolute;
+          top: 8px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 40px;
+          height: 4px;
+          background: var(--border);
+          border-radius: 2px;
+          /* cursor: grab;  /* 暫時註解，避免誤導我 */
+          z-index: 10;
+        }
+      }
+      
+      /* 面板內容 padding，避免被手柄擋住 */
+      #panel-header {
+        padding-top: 30px;  /* 給手柄留空間 */
+      }
+
+      #panel-toggle {
+        display: block;  /* 手機版顯示 */
+      }
+      
+      /* 照片改為單欄 */
+      .photo-row {
+        grid-template-columns: 1fr;
+      }
+      
+      /* 隱藏標記文字（手機螢幕小）*/
+      .marker-label {
+        display: none;
+      }
+      
+      /* 地圖提示文字 */
+      #map-hint {
+        font-size: 0.5rem;
+        bottom: 8px;
+        left: 8px;
+        background: rgba(13, 13, 15, 0.8);
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+    }
+
+    /* 更小螢幕 */
+    @media (max-width: 480px) {
+      #map-area {
+        height: 55vh;
+      }
+      
+      #panel {
+        height: 45vh;
+        max-height: 80vh;
+      }
+    }
+
+    /* ========== 預防移動瀏覽器底部工作列擋住內容 ========== */
+    /* 適用於 Safari、Chrome、Brave、微信等 */
+    @supports (-webkit-touch-callout: none) {
+      #panel {
+        padding-bottom: constant(safe-area-inset-bottom, 20px);
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+      }
+      
+      #map-hint {
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      }
+      
+      footer {
+        padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+
+    /* 讓簡介文字在展開時完整顯示 */
+    .mcard.active .mcard-desc {
+      overflow: visible;
+      white-space: normal;
+    }
+
+    .mcard-top {
+      padding: 13px 15px 11px;
+      overflow: visible;  /* 改為 visible，讓文字不被截斷 */
+    }
+
+    /* ========== GLightbox 自定義樣式 ========== */
+    .glightbox-container {
+      background: rgba(13, 13, 15, 0.95) !important;
+    }
+
+    .glightbox-description {
+      color: var(--muted) !important;
+      background: rgba(13, 13, 15, 0.9) !important;
+    }
+
+    .gslide-title {
+      color: var(--text) !important;
+      font-family: 'Playfair Display', Georgia, serif !important;
+    }
+
+    .gclose {
+      color: var(--gold) !important;
+      font-size: 2rem !important;
+    }
+
+    /* 🔥 關鍵：限制圖片大小 */
+    .glightbox-container .gslide-image {
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
+    }
+
+    .glightbox-container .gslide-image img {
+      max-width: 70vw !important;
+      max-height: 70vh !important;
+      width: auto !important;
+      height: auto !important;
+      object-fit: contain !important;
+    }
+
+    /* 手機版調整 */
+    @media (max-width: 768px) {
+      .glightbox-container .gslide-image img {
+        max-width: 85vw !important;
+        max-height: 60vh !important;
+      }
+    }
+
+    /* 確保描述文字不遮擋圖片 */
+    .glightbox-container .gslide-description {
+      position: relative !important;
+      margin-top: 10px !important;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>NYC Musical Geography</h1>
+  <span>美國音樂劇中的紐約地景 · 原型 v0.1</span>
+</header>
+
+<main>
+  <div id="map-area">
+    <div id="map"></div> <!-- Leaflet 地圖容器 -->
+
+    <div id="map-hint">
+      ● 數字 = 相關音樂劇數量<br>
+      ● 點擊金色標記查看詳情
+    </div>
+  </div>
+
+  <!-- 右側面板 -->
+  <aside id="panel">
+    <!-- 加這個按鈕 -->
+    <button id="panel-toggle" style="
+      position: absolute;
+      top: 5px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+      z-index: 20;
+    ">▴</button>
+    
+    <div id="panel-empty">
+      <div class="icon">◎</div>
+      <p>點擊地圖上的<br>金色標記<br>查看該地點在音樂劇中的呈現</p>
+    </div>
+    <div id="panel-content">
+      <div id="panel-header">
+        <div id="panel-era"></div>
+        <div id="panel-title"></div>
+        <div id="panel-sub"></div>
+      </div>
+      <div id="panel-body"></div>
+    </div>
+  </aside>
+</main>
+
+<footer id="about-trigger" style="cursor:pointer;">
+  ◎ NYC Musical Geography · 原型版本
+  <span style="display:block;margin-top:4px;font-size:0.55rem;color:var(--muted);">
+    歷史照片來源：NYPL Digital Collections（Public Domain）· 劇照僅供教育研究使用
+  </span>
+</footer>
+
+<script>
+// 圖片加載失敗處理函數
+function handleImageError(img) {
+  img.src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22150%22 viewBox=%220 0 200 150%22%3E%3Crect fill=%22%231a1a24%22 width=%22200%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23b8b4a8%22 font-size=%2214%22%3E圖片加載失敗%3C/text%3E%3C/svg%3E';
+  img.alt = '圖片加載失敗，請稍後再試';
+}
+
+const LOCATIONS = {
+  "greenwich-village": {
+    name: "格林威治村", sub: "曼哈頓下城西側", era: "1950s — 1990s",
+    latLng: [40.7330, -74.0020],
+    musicals: [
+      { 
+        name: "Rent", year: "1996", setting: "1990年代・East Village", 
+        desc: "以HIV/AIDS危機為背景，描繪藝術家與同志社群在仕紳化浪潮前夕的生活。", 
+        detail: "East Village 在地理上隸屬格林威治村東側，1990年代是廉租公寓、地下藝術場景與同志社群的共生地帶。這張1910年的照片展示了義大利移民家庭在東區廉租公寓的居住空間，雖然年代相隔80年，但這種「後部廉租公寓」（rear tenement）正是1990年代藝術家與邊緣社群的居住地。隨著仕紳化加速，這片街區的文化生態正迅速消失，Rent成為那個消逝世界的最後紀錄。", 
+        stageNote: "Nederlander Theatre", 
+        histNote: "NYC Department of Records" 
+      },
+      { 
+        name: "Hair", year: "1968", setting: "1960年代・Greenwich Village", 
+        desc: "以反越戰為核心，呈現嬉皮世代的公社生活與文化叛逆。", 
+        detail: "1960年代的格林威治村是美國反文化運動的地理中心，咖啡館、地下詩刊、民謠俱樂部密布其中。Washington Square Park 是民謠音樂、反戰抗議的聚集地。Hair的首演地點本身就在村內的公共劇場，將劇場空間與社區精神合而為一。", 
+        stageNote: "Public Theater", 
+        histNote: "Library of Congress" 
+      }
+    ]
+  },
+  "harlem": {
+    name: "哈萊姆", sub: "曼哈頓上城東側", era: "1920s — 現在",
+    latLng: [40.8116, -73.9465],
+    musicals: [
+      { 
+        name: "Shuffle Along", year: "1921", setting: "1920年代・哈萊姆文藝復興", 
+        desc: "百老匯史上第一部全黑人主創音樂劇。", 
+        detail: "1921年的哈萊姆正處於文藝復興運動爆發期，爵士樂、文學、視覺藝術與舞台表演同步蓬勃。Shuffle Along的成功打破了當時劇場業的種族隔離慣例，促使百老匯製作人開始認真看待黑人觀眾與黑人藝術家的市場潛力。", 
+        stageNote: "63rd Street Music Hall", histNote: "Schomburg Center" 
+      },
+      { 
+        name: "The Wiz", year: "1975", setting: "1970年代・哈萊姆", 
+        desc: "《綠野仙蹤》的黑人文化重述。", 
+        detail: "1975年的哈萊姆同時承受著財政危機帶來的社區衰敗，與黑人藝術運動帶來的文化自覺，兩股力量形成強烈撕裂。The Wiz選擇以神話語言回應這種撕裂，Dorothy的返家之路隱喻黑人社群對文化根源與自我認同的尋索。", 
+        stageNote: "Majestic Theatre", histNote: "Harlem Cultural Archives" 
+      }
+    ]
+  },
+  "washington-heights": {
+    name: "華盛頓高地", sub: "曼哈頓最北端", era: "1980s — 2000s",
+    latLng: [40.8500, -73.9343],
+    musicals: [
+      { 
+        name: "In the Heights", year: "2008", setting: "2000年代・Washington Heights", 
+        desc: "描繪多明尼加裔社群的日常夢想與身份掙扎。", 
+        detail: "華盛頓高地自1980年代起成為紐約最密集的拉丁裔聚居地之一，多明尼加移民在此建立了以街角雜貨店、髮廊與街頭音樂為核心的社區文化。仕紳化的威脅在2000年代逐漸逼近，使得「留下或離開」成為整個社群的共同命題。Lin-Manuel Miranda本人在此長大，劇中街景高度貼近其童年記憶。", 
+        stageNote: "Richard Rodgers Theatre", histNote: "NYC Municipal Archives" 
+      }
+    ]
+  },
+  "times-square-theater-district": {
+    name: "時代廣場劇院區", sub: "曼哈頓中城", era: "1920s — 現在",
+    latLng: [40.7580, -73.9855],
+    musicals: [
+      { 
+        name: "Chicago", year: "1975", setting: "1920年代・禁酒令時代", 
+        desc: "諷刺名利場對謀殺案的娛樂化消費。", 
+        detail: "1920年代的時代廣場是爵士俱樂部、地下酒館與八卦報業共生的娛樂生態圈。當時的劇院區緊鄰報社集中的Park Row，謀殺案能否上頭版幾乎決定了當事人的命運走向。Chicago以芝加哥為名，但其諷刺的媒體文化本質屬於整個東岸大城的時代病徵。", 
+        stageNote: "46th Street Theatre", histNote: "NY Daily News Archive" 
+      },
+      { 
+        name: "42nd Street", year: "1980", setting: "1930年代・大蕭條", 
+        desc: "初出茅廬舞者一夜成名的故事。", 
+        detail: "1930年代的42nd Street是真實的演藝工業街，劇院、排練室、經紀人辦公室密集分布，充滿工會談判、薪資糾紛與激烈競爭的勞動現實。大蕭條使演藝工作者的處境格外脆弱，「上台」不只是夢想，更是生存問題。這部劇保存了百老匯在成為觀光品牌之前，作為勞動場域的歷史記憶。", 
+        stageNote: "St. James Theatre", histNote: "Library of Congress" 
+      }
+    ]
+  },
+  "hell-kitchen": {
+    name: "地獄廚房", sub: "曼哈頓西側", era: "1950s — 2000s",
+    latLng: [40.7644, -73.9900],
+    musicals: [
+      { 
+        name: "West Side Story", year: "1957", setting: "1950年代・Hell's Kitchen", 
+        desc: "波多黎各移民與本地白人幫派的地盤之爭。", 
+        detail: "劇中的街道是1950年代真實存在的地獄廚房面貌。這個區域後來在都市更新計畫中被拆除，用以興建林肯中心。音樂劇本身因而成了這段城市記憶的唯一保存。Jerome Robbins曾親赴當地街頭觀察幫派文化以設計舞蹈動作。", 
+        stageNote: "Winter Garden Theatre", histNote: "NYPL Digital Collections" 
+      }
+    ]
+  },
+  "lower-east-side": {
+    name: "Lower East Side", sub: "Downtown Manhattan", era: "1900s — 1990s",
+    latLng: [40.7150, -73.9840],
+    musicals: [
+      { 
+        name: "Ragtime", year: "1998", setting: "1900年代・移民社群", 
+        desc: "三條平行敘事線呈現世紀之交的社會分層。", 
+        detail: "下東城在1900年代是歐洲移民的第一落腳點，義大利人、猶太人、東歐人擠在六層樓公寓裡。Ragtime以城市空間本身作為社會不平等的隱喻，白人中產、黑人社群、猶太移民三條線在地理上平行卻交織。這張廉租公寓區的街景照片展示了那個時代的真實面貌——擁擠的街道、密集的建築、多元的族群共存。", 
+        stageNote: "Ford Center", histNote: "NYPL Digital Collections" 
+      },
+      { 
+        name: "Rent", year: "1996", setting: "1990年代・East Village (Alphabet City)", 
+        desc: "《波西米亞人》的後現代改編，聚焦 Alphabet City 的邊緣社群。", 
+        detail: "Alphabet City（A大道至D大道區域）在地理上屬於下東城北側，1990年代是仕紳化的臨界點。這張廉租公寓照片展示了這個社區作為移民聚居地的歷史根源。Rent拍下了這個社區被「清洗」前的最後面貌，La Vie Bohème那首歌幾乎是一份城市人類學文件。劇中角色的真實原型許多都居住在這一帶的廉租公寓裡。", 
+        stageNote: "Nederlander Theatre", 
+        histNote: "NYC Dept of Records" 
+      }
+    ]
+  },
+  "financial-district": {
+    name: "Financial District", sub: "Lower Manhattan", era: "1770s — 現在",
+    latLng: [40.7074, -74.0113],
+    musicals: [
+      { 
+        name: "Hamilton", year: "2015", setting: "1776–1804・建國時期", 
+        desc: "以嘻哈語言重述美國建國史。", 
+        detail: "劇中的Battery、Wall Street是18世紀紐約的政治核心。Hamilton選擇用當代黑人與拉丁裔演員詮釋開國元勛，是對這片土地「誰才算美國人」的直接質問。音樂劇本身成為對移民歷史與美國身份認同的持續辯論。", 
+        stageNote: "Richard Rodgers Theatre", histNote: "Library of Congress" 
+      }
+    ]
+  },
+  "brooklyn": {
+    name: "布魯克林", sub: "Brooklyn", era: "1900s — 現在",
+    latLng: [40.6700, -73.9400],
+    musicals: [
+      { 
+        name: "Brooklyn", year: "2004", setting: "當代・布魯克林街頭", 
+        desc: "街頭說書人講述尋親故事。", 
+        detail: "2000年代初的布魯克林正處於大規模仕紳化的前夕，舊工業區與移民社區並存，形成獨特的文化張力。此劇刻意以街頭音樂劇的形式呼應布魯克林的庶民性格，不同族裔角色各自代表城市的一個聲部。", 
+        stageNote: "Plymouth Theatre", histNote: "Brooklyn Historical Society" 
+      },
+      { 
+        name: "Saturday Night", year: "1997", setting: "1950年代・布魯克林", 
+        desc: "Sondheim 早期作品，描繪跨越大橋的渴望。", 
+        detail: "1950年代的布魯克林是工人階級與移民家庭的居住地，曼哈頓則代表著難以企及的繁華彼岸。劇中人物橫跨布魯克林大橋的渴望，精準捕捉了戰後世代對階級流動的焦慮與想像。這部作品因故延遲逾四十年才正式首演。", 
+        stageNote: "Second Stage Theatre", histNote: "Brooklyn Public Library" 
+      }
+    ]
+  },
+  "bronx": {
+    name: "布朗克斯", sub: "The Bronx", era: "1970s — 1980s",
+    latLng: [40.8300, -73.9100],
+    musicals: [
+      { 
+        name: "The Elaborate Entrance of Chad Deity", year: "2010", setting: "當代・摔角場館", 
+        desc: "以摔角探討種族敘事的扭曲形象。", 
+        detail: "布朗克斯自1970年代大火與經濟崩潰後，長期背負「美國最貧困城區」的污名標籤，卻同時孕育了嘻哈文化的誕生。這部作品以職業摔角的表演性暴力，隱喻美國主流文化對有色人種形象的消費與扭曲。", 
+        stageNote: "Second Stage Theatre", histNote: "Bronx Documentary Center" 
+      }
+    ]
+  },
+  "coney-island": {
+    name: "科尼島", sub: "Brooklyn South", era: "1890s — 1950s",
+    latLng: [40.5740, -73.9800],
+    musicals: [
+      { 
+        name: "Funny Girl", year: "1964", setting: "1910s・Coney Island", 
+        desc: "Fanny Brice 從貧民窟到百老匯的歷程。", 
+        detail: "科尼島在二十世紀初是紐約工人階級最重要的娛樂場域，移民家庭在此找到短暫逃離貧困的歡樂出口。Fanny Brice的喜劇天賦正是在這種市井娛樂文化中被磨礪成形。遊樂場、雜耍表演與海濱小攤共同構成了那個年代紐約下層社會的文化景觀。", 
+        stageNote: "Winter Garden Theatre", histNote: "Library of Congress" 
+      }
+    ]
+  },
+  "upper-west-side": {
+    name: "上西城", sub: "曼哈頓上城西側", era: "1950s — 現在",
+    latLng: [40.7800, -73.9700],
+    musicals: [
+      {
+        name: "West Side Story", year: "1957", setting: "1950年代・上西城", 
+        desc: "都市更新前夕的幫派衝突。", 
+        detail: "劇中的街景對應的是1950年代上西城與地獄廚房交界處，彼時正面臨大規模都市更新拆除，為林肯中心表演藝術區的興建讓路。此一歷史諷刺意味深遠：一部記錄被迫遷徙社群的音樂劇，其首演地點的誕生本身正是另一波強制遷徙的結果。", 
+        stageNote: "Winter Garden Theatre", histNote: "NYPL Digital Collections" 
+      }
+    ]
+  }
+};
+
+// 綁定點擊事件
+let activeMarker = null;
+
+document.querySelectorAll('.marker-group').forEach(function(group) {
+  group.addEventListener('click', function() {
+    const id = this.dataset.id;
+    const loc = LOCATIONS[id];
+    if (!loc) return;
+
+    if (activeMarker) activeMarker.classList.remove('active');
+    this.classList.add('active');
+    activeMarker = this;
+
+    showPanel(loc);
+  });
+});
+
+function showPanel(loc) {
+  document.getElementById('panel-empty').style.display = 'none';
+
+  const content = document.getElementById('panel-content');
+  content.style.display = 'flex';
+  content.style.flexDirection = 'column';
+  content.style.height = '100%';
+  content.style.overflow = 'hidden';
+
+  document.getElementById('panel-era').textContent = loc.era;
+  document.getElementById('panel-title').textContent = loc.name;
+  document.getElementById('panel-sub').textContent = loc.sub;
+
+  const body = document.getElementById('panel-body');
+  body.innerHTML = '';
+
+  loc.musicals.forEach(function(m, i) {
+    const detailId = 'det-' + i + '-' + Date.now();
+    const card = document.createElement('div');
+    card.className = 'mcard';
+    card.innerHTML =
+      '<div class="mcard-top">' +
+        '<div class="mcard-row">' +
+          '<div class="mcard-name">' + m.name + '</div>' +
+          '<div class="mcard-year">' + m.year + '</div>' +
+        '</div>' +
+        '<div class="mcard-setting">' + m.setting + '</div>' +
+        '<div class="mcard-desc">' + m.desc + '</div>' +
+      '</div>' +
+      '<button class="expand-btn">▸ 展開詳細內容</button>' +
+      '<div class="mcard-detail" id="' + detailId + '">' +
+        '<div class="photo-row">' +
+          '<div class="photo-box">' +
+            '<div class="picon">🎭</div>' +
+            '<div class="plabel">劇照</div>' +
+            '<div class="psource">' + m.stageNote + '</div>' +
+          '</div>' +
+          '<div class="photo-box" style="position:relative;overflow:hidden;padding:0;">' +
+            (m.name === "Chicago" ? 
+              '<a href="https://iiif.nypl.org/iiif/3/G91F183_069F/full/!1200,1200/0/default.jpg" ' +
+                  'class="glightbox" ' +
+                  'data-gallery="historical-photos" ' +
+                  'style="display:block;width:100%;height:100%;">' +
+                  '<img src="https://iiif.nypl.org/iiif/3/G91F183_069F/full/!760,760/0/default.jpg" ' +
+                      'alt="Broadway 1920s" ' +
+                      'style="width:100%;height:100%;object-fit:cover;border-radius:2px;" ' +
+                      'onerror="handleImageError(this)">' +
+              '</a>'+
+              '<div style="position:absolute;bottom:4px;left:4px;right:4px;' +
+                  'background:rgba(13,13,15,0.85);padding:3px 5px;' +
+                  'border-radius:2px;font-size:9px;color:#b8b4a8;' +
+                  'text-align:center;">NYPL 1920s</div>'
+              :
+              m.name === "42nd Street" ?
+              '<a href="https://iiif.nypl.org/iiif/3/1530712/full/!1200,1200/0/default.jpg" ' +
+                  'class="glightbox" ' +
+                  'data-gallery="historical-photos" ' +
+                  'style="display:block;width:100%;height:100%;">' +
+                  '<img src="https://iiif.nypl.org/iiif/3/1530712/full/!760,760/0/default.jpg" ' +
+                      'alt="42nd Street 1930s" ' +
+                      'style="width:100%;height:100%;object-fit:cover;border-radius:2px;" ' +
+                      'onerror="handleImageError(this)">' +
+              '</a>'+
+              '<div style="position:absolute;bottom:4px;left:4px;right:4px;' +
+                  'background:rgba(13,13,15,0.85);padding:3px 5px;' +
+                  'border-radius:2px;font-size:9px;color:#b8b4a8;' +
+                  'text-align:center;">NYPL 1930s</div>'
+              :
+              m.name === "Shuffle Along" ?
+              '<a href="https://iiif.nypl.org/iiif/3/5022317/full/!1200,1200/0/default.jpg" ' +
+                  'class="glightbox" ' +
+                  'data-gallery="historical-photos" ' +
+                  'style="display:block;width:100%;height:100%;">' +
+                  '<img src="https://iiif.nypl.org/iiif/3/5022317/full/!760,760/0/default.jpg" ' +
+                      'alt="Harlem 1920s" ' +
+                      'style="width:100%;height:100%;object-fit:cover;border-radius:2px;" ' +
+                      'onerror="handleImageError(this)">' +
+              '</a>'+
+              '<div style="position:absolute;bottom:4px;left:4px;right:4px;' +
+                  'background:rgba(13,13,15,0.85);padding:3px 5px;' +
+                  'border-radius:2px;font-size:9px;color:#b8b4a8;' +
+                  'text-align:center;">NYPL 1920s</div>'
+              :
+              m.name === "Hair" ?
+              '<a href="https://iiif.nypl.org/iiif/3/482858/full/!1200,1200/0/default.jpg" ' +
+                  'class="glightbox" ' +
+                  'data-gallery="historical-photos" ' +
+                  'style="display:block;width:100%;height:100%;">' +
+                  '<img src="https://iiif.nypl.org/iiif/3/482858/full/!760,760/0/default.jpg" ' +
+                      'alt="Washington Square 1960s" ' +
+                      'style="width:100%;height:100%;object-fit:cover;border-radius:2px;" ' +
+                      'onerror="handleImageError(this)">' +
+              '</a>'+
+              '<div style="position:absolute;bottom:4px;left:4px;right:4px;' +
+                  'background:rgba(13,13,15,0.85);padding:3px 5px;' +
+                  'border-radius:2px;font-size:9px;color:#b8b4a8;' +
+                  'text-align:center;">NYPL 1960s</div>'
+              :
+              m.name === "Rent" && loc.name === "格林威治村" ?
+              '<a href="https://iiif.nypl.org/iiif/3/464294/full/!1200,1200/0/default.jpg" ' +
+                  'class="glightbox" ' +
+                  'data-gallery="historical-photos" ' +
+                  'style="display:block;width:100%;height:100%;">' +
+                  '<img src="https://iiif.nypl.org/iiif/3/464294/full/!760,760/0/default.jpg" ' +
+                      'alt="East Village Tenement 1910" ' +
+                      'style="width:100%;height:100%;object-fit:cover;border-radius:2px;" ' +
+                      'onerror="handleImageError(this)">' +
+              '</a>'+
+              '<div style="position:absolute;bottom:4px;left:4px;right:4px;' +
+                  'background:rgba(13,13,15,0.85);padding:3px 5px;' +
+                  'border-radius:2px;font-size:9px;color:#b8b4a8;' +
+                  'text-align:center;">NYPL 1910s</div>'
+              :
+              m.name === "Rent" && loc.name === "Lower East Side" ?
+              '<a href="https://iiif.nypl.org/iiif/3/5164606/full/!1200,1200/0/default.jpg" ' +
+                  'class="glightbox" ' +
+                  'data-gallery="historical-photos" ' +
+                  'style="display:block;width:100%;height:100%;">' +
+                  '<img src="https://iiif.nypl.org/iiif/3/5164606/full/!760,760/0/default.jpg" ' +
+                      'alt="Tenement House" ' +
+                      'style="width:100%;height:100%;object-fit:cover;border-radius:2px;" ' +
+                      'onerror="handleImageError(this)">' +
+              '</a>'+
+              '<div style="position:absolute;bottom:4px;left:4px;right:4px;' +
+                  'background:rgba(13,13,15,0.85);padding:3px 5px;' +
+                  'border-radius:2px;font-size:9px;color:#b8b4a8;' +
+                  'text-align:center;">NYPL</div>'
+              :
+              m.name === "Ragtime" ?
+              '<a href="https://iiif.nypl.org/iiif/3/G91F179_006F/full/!1200,1200/0/default.jpg" ' +
+                  'class="glightbox" ' +
+                  'data-gallery="historical-photos" ' +
+                  'style="display:block;width:100%;height:100%;">' +
+                  '<img src="https://iiif.nypl.org/iiif/3/G91F179_006F/full/!760,760/0/default.jpg" ' +
+                      'alt="Tenement District 1900s" ' +
+                      'style="width:100%;height:100%;object-fit:cover;border-radius:2px;" ' +
+                      'onerror="handleImageError(this)">' +
+              '</a>'+
+              '<div style="position:absolute;bottom:4px;left:4px;right:4px;' +
+                  'background:rgba(13,13,15,0.85);padding:3px 5px;' +
+                  'border-radius:2px;font-size:9px;color:#b8b4a8;' +
+                  'text-align:center;">NYPL 1900s</div>'
+              :
+              '<div class="picon">📷</div>' +
+              '<div class="plabel">歷史照片</div>' +
+              '<div class="psource">' + m.histNote + '</div>'
+            ) +
+          '</div>' +
+        '</div>' +
+        '<div class="detail-text">' + m.detail + '</div>' +
+      '</div>';
+
+    var btn = card.querySelector('.expand-btn');
+    var detail = card.querySelector('.mcard-detail');
+    btn.addEventListener('click', function() {
+      var isOpen = detail.classList.toggle('open');
+      btn.textContent = isOpen ? '▾ 收起' : '▸ 展開詳細內容';
+      card.classList.toggle('active', isOpen);
+    });
+
+    body.appendChild(card);
+  });
+}
+
+// ==========================================
+//  Leaflet 地圖初始化
+// ==========================================
+
+// 1. 創建地圖，中心設在紐約市，縮放等級 12
+const map = L.map('map', {
+  zoomControl: false,
+  attributionControl: false
+}).setView([40.7300, -73.9600], 12);
+
+// 2. 添加深色地圖圖層 (CartoDB Dark Matter)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19
+}).addTo(map);
+
+// 3. 自定義標記圖標工廠
+function createIcon(count) {
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `<div class="marker-circle">${count}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+  });
+}
+
+// 4. 將所有地點繪製到地圖上
+Object.keys(LOCATIONS).forEach(function(key) {
+  const loc = LOCATIONS[key];
+  
+  if (!loc.latLng) return; 
+  const count = loc.musicals ? loc.musicals.length : 0;
+
+  const marker = L.marker(loc.latLng, {
+    icon: createIcon(count)
+  }).addTo(map);
+
+  marker.on('click', function() {
+    document.querySelectorAll('.marker-circle').forEach(el => el.classList.remove('active'));
+    this.getElement().querySelector('.marker-circle').classList.add('active');
+    showPanel(loc);
+    map.flyTo(loc.latLng, 13, {
+      animate: true,
+      duration: 1
+    });
+  });
+
+  const label = L.divIcon({
+    className: 'marker-label',
+    html: loc.name,
+    iconSize: [100, 20],
+    iconAnchor: [15, 30]
+  });
+  L.marker(loc.latLng, { icon: label }).addTo(map);
+});
+
+// 手機版面板展開/收合
+const panelToggle = document.getElementById('panel-toggle');
+const panel = document.getElementById('panel');
+let isExpanded = false;
+
+if (panelToggle && window.innerWidth <= 768) {
+  panelToggle.addEventListener('click', function() {
+    isExpanded = !isExpanded;
+    if (isExpanded) {
+      panel.style.maxHeight = '85vh';
+      panelToggle.textContent = '▾';
+    } else {
+      panel.style.maxHeight = '40vh';
+      panelToggle.textContent = '▴';
+    }
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 350); 
+  });
+}
+
+// 關於彈窗邏輯 + GLightbox 初始化
+document.addEventListener('DOMContentLoaded', function() {
+  const aboutTrigger = document.getElementById('about-trigger');
+  const aboutModal = document.getElementById('about-modal');
+  const aboutClose = document.getElementById('about-close');
+  
+  if (aboutTrigger && aboutModal && aboutClose) {
+    aboutTrigger.addEventListener('click', function() {
+      aboutModal.style.display = 'flex';
+    });
+    
+    aboutClose.addEventListener('click', function() {
+      aboutModal.style.display = 'none';
+    });
+    
+    aboutModal.addEventListener('click', function(e) {
+      if (e.target === aboutModal) {
+        aboutModal.style.display = 'none';
+      }
+    });
+    
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && aboutModal.style.display === 'flex') {
+        aboutModal.style.display = 'none';
+      }
+    });
+  }
+
+  // 初始化 GLightbox
+  const lightbox = GLightbox({
+    touchNavigation: true,
+    loop: false,
+    autoplayVideos: false,
+    moreText: '查看更多',
+    moreLength: 60,
+    slideEffect: 'fade',
+    closeOnOutsideClick: true,
+    onOpen: () => {
+      console.log('Lightbox opened');
+    },
+    onError: (slide) => {
+      console.log('圖片加載失敗，請稍後再試');
+    }
+  });
+});
+</script>
+
+<!-- "關於"彈窗 -->
+  <div id="about-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(13,13,15,0.85);z-index:1000;justify-content:center;align-items:center;">
+    <div style="background:var(--surface);padding:32px;border-radius:4px;max-width:500px;width:90%;color:var(--text);border:1px solid var(--border);">
+      <h3 style="font-family:'Playfair Display',Georgia,serif;font-size:1.4rem;color:var(--gold);margin-bottom:16px;">關於 NYC Musical Geography</h3>
+      
+      <div style="font-size:0.85rem;line-height:1.8;color:var(--muted);margin-bottom:20px;">
+        <p style="margin-bottom:12px;">
+          這是一個探索<strong>美國音樂劇如何呈現紐約城市地景</strong>的研究專案。透過地圖與歷史照片的結合，我們展示音樂劇與特定時代、特定街區的文化與社會議題的關聯。
+        </p>
+        <p style="margin-bottom:12px;">
+          本網站不僅展示音樂劇劇情，更強調<strong>「城市如何被音樂劇呈現」</strong>的策展視角，涵蓋種族、階級、移民、仕紳化等議題。
+        </p>
+        <p>
+          <strong>資料來源：</strong>歷史照片來自紐約公共圖書館數位典藏（NYPL Digital Collections，Public Domain）。劇照僅供教育與學術研究使用。
+        </p>
+      </div>
+      
+      <button id="about-close" style="width:100%;padding:10px;background:var(--gold);border:none;border-radius:2px;color:var(--bg);font-family:'DM Sans',sans-serif;font-weight:500;cursor:pointer;">關閉</button>
+    </div>
+  </div>
+
+</body>
+</html>
